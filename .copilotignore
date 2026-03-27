@@ -1,0 +1,13 @@
+# Sensitive files — never send to Copilot
+.env
+.env.*
+!.env.example
+
+# Secrets and credentials
+*.pem
+*.key
+*.p12
+*.pfx
+*secret*
+*credential*
+*password*

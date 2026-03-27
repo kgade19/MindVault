@@ -1,0 +1,13 @@
+{
+  "search.exclude": {
+    "**/.env": true,
+    "**/.env.*": true,
+    "!**/.env.example": false
+  },
+  "github.copilot.chat.excludeFiles": [
+    ".env",
+    "**/.env",
+    "**/.env.*",
+    "!**/.env.example"
+  ]
+}
