@@ -47,6 +47,7 @@ def embed_and_store(
     expert_id: int | None = None,
     document_id: int | None = None,
     session_id: int | None = None,
+    project: str = "",
 ) -> int:
     """
     Chunk text and upsert all chunks into the resource_chunks collection.
@@ -62,6 +63,7 @@ def embed_and_store(
         "expert_id": expert_id or "",
         "document_id": document_id or "",
         "session_id": session_id or "",
+        "project": project,
     }
 
     for i, chunk in enumerate(chunks):

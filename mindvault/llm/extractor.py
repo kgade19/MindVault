@@ -7,7 +7,20 @@ import re
 from mindvault.config import load_prompt
 from mindvault.llm.claude_client import chat
 
-_VALID_TYPES = {"decision", "lesson_learned", "process", "named_entity", "open_question"}
+# Must stay in sync with ARTIFACT_TYPES in sqlite_db.py and extraction_system.txt.
+_VALID_TYPES = {
+    "heuristic",
+    "if_then_rule",
+    "case_example",
+    "red_flag",
+    "mental_model",
+    "exception",
+    "decision_factor",
+}
+
+# Artifacts with confidence below this threshold trigger a re-probe in the
+# interview agent before the session moves on.
+LOW_CONFIDENCE_THRESHOLD = 0.7
 
 
 def extract_artifacts(text: str) -> list[dict]:
@@ -20,7 +33,8 @@ def extract_artifacts(text: str) -> list[dict]:
             "artifact_type": one of _VALID_TYPES,
             "title": str,
             "content": str (min 30 chars),
-            "tags": list[str]
+            "tags": list[str],
+            "confidence": float (0.0–1.0)
         }
     Returns only the elements that pass _valid_artifact() validation.
     """
@@ -32,6 +46,21 @@ def extract_artifacts(text: str) -> list[dict]:
 
     raw = chat(messages, system=system, max_tokens=4096)
     return _parse_json_response(raw)
+
+
+def get_low_confidence_mental_models(artifacts: list[dict]) -> list[dict]:
+    """
+    Filter the artifact list for mental_model entries whose confidence is
+    below LOW_CONFIDENCE_THRESHOLD.
+
+    Called after each mid-interview extraction pass to decide whether the
+    interview agent should inject a re-probe instruction on the next turn.
+    """
+    return [
+        a for a in artifacts
+        if a.get("artifact_type") == "mental_model"
+        and float(a.get("confidence", 1.0)) < LOW_CONFIDENCE_THRESHOLD
+    ]
 
 
 def analyse_document(text: str) -> dict:
@@ -83,6 +112,7 @@ def _valid_artifact(a: dict) -> bool:
 
     The 30-character minimum on content filters out placeholder or
     degenerate extractions that provide no useful knowledge signal.
+    confidence is optional in the response; it defaults to 1.0 if absent.
     """
     return (
         isinstance(a, dict)

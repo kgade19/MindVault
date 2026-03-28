@@ -30,13 +30,13 @@ mindvault/voice/         → STT (faster-whisper) + TTS (gTTS)
 prompts/                 → System prompt .txt files, never hardcoded in Python
 ```
 
-**Data flow — Interview:** user turn → `interview_agent` → `claude_client.stream_chat` → every 3 turns `extractor.extract_artifacts` fires → artifacts → SQLite + ChromaDB `artifacts` collection.  
+**Data flow — Interview:** user turn → `interview_agent` → `claude_client.stream_chat` → every 3 turns `extractor.extract_artifacts` fires → artifacts (with `confidence` score) → SQLite + ChromaDB `artifacts` collection → low-confidence `mental_model` artifacts trigger a re-probe instruction on the next turn. Session close → `consistency_checker.run_for_expert()` → `artifact_conflicts` table.  
 **Data flow — Ingest:** file/URL → parser → `extractor` (structured) + `embedder` (chunks) → ChromaDB `resource_chunks` collection.  
 **Data flow — Query:** query → `retriever.retrieve_and_synthesize` → both ChromaDB collections → Claude cited answer with conflict detection.
 
 ChromaDB uses two collections: `artifacts` and `resource_chunks`. Embeddings use the local default (`all-MiniLM-L6-v2`) — no external embedding API.
 
-SQLite schema: `experts` → `interview_sessions` → `interview_messages`, `documents`, `knowledge_artifacts`. All data stored locally under `data/`.
+SQLite schema: `experts` (with `domain`, `tenure_years`, `key_projects`, `knowledge_gaps`, `departure_urgency`) → `interview_sessions` (with `topic`) → `interview_messages`, `documents`, `knowledge_artifacts` (with `confidence`), `artifact_conflicts`. All data stored locally under `data/`.
 
 ## Configuration
 
@@ -65,7 +65,9 @@ All config lives in `.env` (loaded by `mindvault/config.py`):
 - **Prompts** live in `prompts/*.txt`, loaded via `config.load_prompt()` — never hardcode system prompts in Python.
 - Pages call `init_db()` defensively on load (it is idempotent).
 - ChromaDB metadata must be sanitized (no `None` values) before upsert — see `chroma_db.py` for the pattern.
-- Valid artifact types (SQLite CHECK constraint): `decision`, `lesson_learned`, `process`, `named_entity`, `open_question`. Use `extractor._valid_artifact()` before inserts.
+- Valid artifact types (SQLite CHECK constraint, 7 types): `heuristic`, `if_then_rule`, `case_example`, `red_flag`, `mental_model`, `exception`, `decision_factor`. Use `extractor._valid_artifact()` before inserts.
+- Every artifact has a `confidence` float (0.0–1.0) set by the LLM at extraction time. `mental_model` artifacts with `confidence < 0.7` trigger a re-probe instruction injected into the next system prompt.
+- `consistency_checker.run_for_expert(expert_id)` runs after every session close — fetches all expert artifacts, asks Claude to find contradictions, stores results in `artifact_conflicts`.
 
 ## Key Files
 
@@ -75,10 +77,13 @@ All config lives in `.env` (loaded by `mindvault/config.py`):
 | `mindvault/database/sqlite_db.py` | Full schema DDL + all CRUD helpers |
 | `mindvault/database/chroma_db.py` | ChromaDB wrapper for both collections |
 | `mindvault/llm/claude_client.py` | All Claude calls (streaming, non-streaming, vision) |
-| `mindvault/llm/extractor.py` | Artifact extraction and document gap analysis |
+| `mindvault/llm/extractor.py` | Artifact extraction (7-type schema with confidence), doc gap analysis |
+| `mindvault/llm/interview_agent.py` | Prompt builder (4-phase), session summary, re-probe instruction |
+| `mindvault/llm/consistency_checker.py` | Post-session conflict detection across all expert artifacts |
 | `mindvault/rag/embedder.py` | Chunking (500-word, 250-word overlap) + ChromaDB upsert |
 | `mindvault/rag/retriever.py` | Full RAG pipeline: query → retrieve → synthesize → parse conflicts |
-| `pages/1_Interview.py` | Most complex page; full interview + mid-turn extraction loop |
+| `pages/1_Interview.py` | Most complex page; interview + extraction + continuation + consistency check |
+| `pages/5_Experts.py` | Expert profiles with domain, tenure, knowledge gaps, departure urgency |
 
 ## Pitfalls
 

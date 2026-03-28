@@ -9,30 +9,44 @@ If no artifacts can be extracted, return an empty array: []
 Each artifact must conform exactly to this schema:
 [
   {
-    "artifact_type": "<one of the types below>",
+    "artifact_type": "<one of the seven types below>",
     "title": "<concise, specific title — max 10 words>",
-    "content": "<full detail — preserve all specifics, names, numbers, dates>",
-    "tags": ["<tag1>", "<tag2>"]
+    "content": "<full detail — preserve all specifics, names, numbers, dates; include 'Applies when: ...' and 'Except when: ...' where relevant>",
+    "tags": ["<tag1>", "<tag2>"],
+    "confidence": 0.9
   }
 ]
 
+The confidence field (0.0–1.0) reflects how completely the source text supports this artifact:
+- 0.9–1.0: explicitly stated, all details present
+- 0.7–0.8: mostly explicit, some inference required
+- 0.5–0.6: partially stated; significant detail is implied or missing
+- below 0.5: largely inferred from context; treat as uncertain
+
 ## Artifact Types
-Use EXACTLY one of these values for artifact_type:
+Use EXACTLY one of these seven values for artifact_type:
 
-**decision** — A significant choice made, including what was decided, why, what alternatives were rejected, and what constraints drove the decision.
+**heuristic** — A reusable rule of thumb distilled from experience. Not a one-off decision but a general principle the expert applies repeatedly. Must include the pattern and the reasoning behind it.
 
-**lesson_learned** — A hard-won insight, mistake to avoid, warning, or counterintuitive finding. Must include what happened and what to do/avoid as a result.
+**if_then_rule** — A conditional procedure: "IF [situation/signal] THEN [action/response]." Must include the trigger condition and the prescribed response. Include thresholds, sequences, or escalation paths where stated.
 
-**process** — A workflow, procedure, or how-to. Must include steps in order, any preconditions, and who is responsible.
+**case_example** — A concrete past instance that illustrates a principle or outcome. Must include what happened, what was done, and what the result or lesson was. Names, dates, and system identifiers should be preserved.
 
-**named_entity** — A critical person, team, system, vendor, or tool. Must include: what it is, why it matters, and how to interact with it effectively.
+**red_flag** — A warning signal or early indicator that something is wrong or about to go wrong. Must include: the observable signal, what it indicates, and what action should follow. Distinct from heuristic in that it is reactive (triggered by a problem) rather than proactive.
 
-**open_question** — An unresolved issue, known risk, or decision that was deferred. Must include context on why it is unresolved and what would be needed to resolve it.
+**mental_model** — The conceptual framework the expert uses to understand or reason about a domain. Describes HOW they think about a problem, not just what they know. Often reveals assumptions, priorities, or simplifications they rely on.
+
+**exception** — A known, deliberate deviation from a standard rule or process. Must state: what the general rule is, what the exception is, under what conditions it applies, and why the deviation is justified.
+
+**decision_factor** — A recurring variable or criterion the expert always evaluates before making a particular class of decision. Captures the expert's standing evaluation checklist, not a single past choice.
 
 ## Extraction Rules
 - Extract every distinct artifact — do not merge unrelated items.
-- Preserve ALL specific names, numbers, dates, and identifiers in the content field.
-- Tags should be lowercase, hyphenated, 1-3 words each. Include domain tags (e.g. "infrastructure", "security") and topic tags.
 - A single passage may yield multiple artifacts of different types.
+- Preserve ALL specific names, numbers, dates, and identifiers in the content field.
+- Where applicable, embed context in the content field using these markers:
+    "Applies when: ..." for conditions under which the rule/heuristic holds.
+    "Except when: ..." for known exceptions or edge cases.
+- Tags should be lowercase, hyphenated, 1-3 words each. Include domain tags (e.g. "infrastructure", "security") and topic tags.
 - Minimum content length: 30 words per artifact.
-- Do not fabricate or infer beyond what is explicitly stated in the source text.
+- Do not fabricate or infer beyond what is explicitly or strongly implicitly stated in the source text. Reduce confidence rather than inventing detail.

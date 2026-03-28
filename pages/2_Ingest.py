@@ -8,9 +8,8 @@ from mindvault.database import sqlite_db as db
 from mindvault.ingestion.audio_ingester import transcribe
 from mindvault.ingestion.image_ingester import ingest_image
 from mindvault.ingestion.pdf_parser import extract_text
+from mindvault.ingestion.pipeline import run_pipeline
 from mindvault.ingestion.url_fetcher import fetch_url
-from mindvault.llm import extractor
-from mindvault.rag import embedder
 
 st.set_page_config(page_title="Ingest · MindVault", page_icon="🧠", layout="wide")
 db.init_db()
@@ -28,6 +27,32 @@ expert_options = {f"{e['name']} ({e['role']})": e for e in experts}
 selected_label = st.selectbox("Assign to Expert", list(expert_options.keys()))
 expert = expert_options[selected_label]
 
+# ── Project selector ──────────────────────────────────────────────────────────
+# Parse key_projects text (newline- or comma-separated) into a list.
+def _parse_projects(text: str) -> list[str]:
+    if not text or not text.strip():
+        return []
+    lines = [ln.strip() for ln in text.splitlines() if ln.strip()]
+    if len(lines) > 1:
+        return lines
+    parts = [p.strip() for p in text.split(",") if p.strip()]
+    return parts if len(parts) > 1 else ([text.strip()] if text.strip() else [])
+
+
+key_projects = _parse_projects(expert.get("key_projects", ""))
+if key_projects:
+    project_options = key_projects + ["General / Other"]
+    selected_project_label = st.selectbox("Tag to Project", project_options)
+    if selected_project_label == "General / Other":
+        resolved_project = st.text_input("Custom project tag", placeholder="optional").strip()
+    else:
+        resolved_project = selected_project_label
+else:
+    resolved_project = st.text_input(
+        "Project tag (optional)",
+        placeholder="e.g. Deployment pipeline, Vendor contracts…",
+    ).strip()
+
 st.divider()
 
 
@@ -38,60 +63,38 @@ def _run_pipeline(
     content_text: str,
     sha256: str = "",
 ) -> None:
-    """Common post-ingest pipeline: dedup check → save doc → embed → extract → gap analysis."""
-    if sha256:
-        existing = db.sha256_exists(sha256)
-        if existing:
-            st.warning(
-                f"⚠️ Duplicate detected — this content was already ingested as "
-                f"**{existing['title']}** on {existing['ingested_at'][:10]}. Skipping."
-            )
-            return
-
-    with st.spinner("Saving document…"):
-        doc_id = db.create_document(
+    """Common post-ingest pipeline: calls the shared run_pipeline() and renders results."""
+    with st.spinner("Processing document…"):
+        result = run_pipeline(
             expert_id=expert["id"],
             source_type=source_type,
             source_ref=source_ref,
             title=title,
             content_text=content_text,
             sha256=sha256,
+            project=resolved_project,
         )
 
-    with st.spinner("Embedding text chunks into vector store…"):
-        n_chunks = embedder.embed_and_store(
-            content_text,
-            source_type=source_type,
-            source_ref=source_ref,
-            expert_id=expert["id"],
-            document_id=doc_id,
+    if result["skipped"]:
+        existing = result["existing"]
+        st.warning(
+            f"⚠️ Duplicate detected — this content was already ingested as "
+            f"**{existing['title']}** on {existing['ingested_at'][:10]}. Skipping."
         )
+        return
 
-    with st.spinner("Extracting knowledge artifacts…"):
-        artifacts = extractor.extract_artifacts(content_text)
-        for art in artifacts:
-            art_id = db.create_artifact(
-                artifact_type=art["artifact_type"],
-                title=art["title"],
-                content=art["content"],
-                tags=art.get("tags", []),
-                expert_id=expert["id"],
-                document_id=doc_id,
-            )
-            embedder.embed_artifact(
-                art_id, art["title"], art["content"],
-                art["artifact_type"], expert["id"], source_ref
-            )
+    artifacts = result["artifacts"]
+    gaps = result["gaps"]
+    n_chunks = result["n_chunks"]
 
-    with st.spinner("Analysing document for knowledge gaps…"):
-        analysis = extractor.analyse_document(content_text)
+    st.success(
+        f"✅ Ingested **{title}** — {n_chunks} chunk(s) embedded, "
+        f"{len(artifacts)} artifact(s) extracted."
+    )
 
-    # ── Results ──────────────────────────────────────────────────────────────
-    st.success(f"✅ Ingested **{title}** — {n_chunks} chunk(s) embedded, {len(artifacts)} artifact(s) extracted.")
-
-    if analysis["summary"]:
+    if result["analysis_summary"]:
         with st.expander("📋 Document Summary", expanded=True):
-            st.write(analysis["summary"])
+            st.write(result["analysis_summary"])
 
     if artifacts:
         with st.expander(f"🗂️ {len(artifacts)} Extracted Artifacts", expanded=True):
@@ -99,9 +102,9 @@ def _run_pipeline(
                 st.markdown(f"**[{art['artifact_type'].replace('_', ' ').title()}]** {art['title']}")
                 st.caption(art["content"][:300] + ("…" if len(art["content"]) > 300 else ""))
 
-    if analysis.get("gaps"):
-        with st.expander(f"⚠️ {len(analysis['gaps'])} Knowledge Gaps Identified"):
-            for gap in analysis["gaps"]:
+    if gaps:
+        with st.expander(f"⚠️ {len(gaps)} Knowledge Gaps Identified"):
+            for gap in gaps:
                 st.markdown(f"**{gap['gap_title']}**")
                 st.write(gap["gap_description"])
                 if gap.get("suggested_interview_questions"):
