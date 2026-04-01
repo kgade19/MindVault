@@ -200,3 +200,6 @@ with tab_audio:
                 st.text(text[:1000] + ("…" if len(text) > 1000 else ""))
             title = audio_file.name
             _run_pipeline("audio", audio_file.name, title, text, sha256)
+
+st.divider()
+st.caption("© 2026 Kiran Gade (KG). All rights reserved.")

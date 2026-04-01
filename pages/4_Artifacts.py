@@ -153,3 +153,6 @@ else:
             col_m4.caption(f"**Created:** {art['created_at'][:10]}")
             if art.get("tags"):
                 st.caption("**Tags:** " + " · ".join(f"`{t}`" for t in art["tags"]))
+
+st.divider()
+st.caption("© 2026 Kiran Gade (KG). All rights reserved.")

@@ -69,6 +69,7 @@ def main() -> None:
         "ChromaDB for semantic vector search, and SQLite for relational metadata. "
         "All data is stored locally — nothing leaves your machine."
     )
+    st.caption("© 2026 Kiran Gade (KG). All rights reserved.")
 
 
 main()

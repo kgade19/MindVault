@@ -146,3 +146,6 @@ for expert in experts:
                     f"{status_icon} Session #{s['id']} — started {s['started_at'][:10]}"
                     + (f", completed {s['completed_at'][:10]}" if s["completed_at"] else "")
                 )
+
+st.divider()
+st.caption("© 2026 Kiran Gade (KG). All rights reserved.")

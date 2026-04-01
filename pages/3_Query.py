@@ -75,3 +75,6 @@ if search_clicked and query.strip():
 
 elif search_clicked and not query.strip():
     st.error("Please enter a question before searching.")
+
+st.divider()
+st.caption("© 2026 Kiran Gade (KG). All rights reserved.")

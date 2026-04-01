@@ -392,3 +392,6 @@ if user_input:
 
     st.rerun()
 
+st.divider()
+st.caption("© 2026 Kiran Gade (KG). All rights reserved.")
+
