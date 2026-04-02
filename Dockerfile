@@ -16,5 +16,5 @@ COPY . .
 
 EXPOSE 8501
 
-# PORT is assigned by Railway at runtime; fallback to 8501 locally
-CMD ["sh", "-c", "streamlit run app.py --server.address=0.0.0.0 --server.port=${PORT:-8501} --server.headless=true"]
+# PORT is hardcoded to 8501 to match the Railway service domain configuration
+CMD ["streamlit", "run", "app.py", "--server.address=0.0.0.0", "--server.port=8501", "--server.headless=true"]
