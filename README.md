@@ -1,5 +1,5 @@
 ﻿# MindVault
-
+**Live Demo** https://mindvault-kg.up.railway.app/ (It used Cluade API tokens It's limited)
 **Knowledge Preservation Platform** — capture tacit expertise from departing subject-matter experts via AI-guided interviews, ingest their documents, extract structured knowledge artifacts, and make everything queryable by successors.
 
 ---
